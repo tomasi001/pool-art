@@ -1,0 +1,31 @@
+{
+  "name": "wave-function-simulation",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "webpack serve --open",
+    "build": "webpack",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/three": "^0.169.0",
+    "css-loader": "^7.1.2",
+    "glslify": "^7.1.1",
+    "glslify-loader": "^2.0.0",
+    "html-webpack-plugin": "^5.6.0",
+    "raw-loader": "^4.0.2",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.6.2",
+    "webpack": "^5.95.0",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^5.1.0"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  }
+}
