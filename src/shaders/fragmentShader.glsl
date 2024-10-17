@@ -6,7 +6,7 @@ uniform float time;
 uniform vec2 resolution;
 
 // Maximum number of emitters
-const int MAX_EMITTERS = 50;
+const int MAX_EMITTERS = 5;
 
 // Arrays for emitter positions, start times, and ages
 uniform vec2 emitterPositions[MAX_EMITTERS];
@@ -30,9 +30,13 @@ void main() {
     float waveSum = 0.0;
 
     // Parameters for the waves
-    const float speed = 0.5;
-    const float frequency = 10.0;
-    const float amplitude = 0.5;
+    const float speed = 0.1;
+    const float frequency = 11.0;
+    const float amplitude = 0.99;
+
+    // Attenuation parameters for bell curve
+    const float fadeInDuration = 0.2;  // 20% of lifespan
+    const float fadeOutDuration = 0.2; // 20% of lifespan
 
     // Iterate through all emitters
     for (int i = 0; i < MAX_EMITTERS; i++) {
@@ -51,52 +55,48 @@ void main() {
             continue;
         }
 
+        // Calculate attenuation based on a bell curve (fade-in and fade-out)
+        float fadeFactor = 1.0;
+
+        if (normalizedAge < fadeInDuration) {
+            // Smooth fade-in using smoothstep
+            fadeFactor = smoothstep(0.0, fadeInDuration, normalizedAge);
+        } else if (normalizedAge > (1.0 - fadeOutDuration)) {
+            // Smooth fade-out using smoothstep
+            fadeFactor = smoothstep(1.0, 1.0 - fadeOutDuration, normalizedAge);
+        }
+
         // Calculate distance from the current fragment to the emitter
         float dist = distance(uv, origin);
 
         // Calculate the wave based on distance and elapsed time
-        float wave = sin(dist * frequency - age * speed * 2.0 * 3.141592);
+        float wave = sin(dist * frequency - age * speed * 6.28318530718); // 2*pi ~ 6.28319
 
-        // Calculate attenuation based on distance and age
-        // Linearly fade out the wave influence as emitter ages
-        float attenuation = amplitude / (dist + 1.0) * (1.0 - normalizedAge);
+        // Calculate attenuation based on distance and fadeFactor
+        float attenuation = amplitude / (dist + 1.0) * fadeFactor;
 
-        // Apply smooth fading
+        // Apply attenuation to wave
         wave *= attenuation;
 
         // Sum up the waves
         waveSum += wave;
     }
 
-    // Map wave sum to wave intensity
-    float waveIntensity = (sin(waveSum) + 1.0) / 2.0;
+    // Map wave sum directly to wave intensity
+    // Scale and clamp to ensure values stay within [0.0, 1.0]
+    float waveIntensity = clamp(waveSum * 0.5 + 0.5, 0.0, 1.0);
 
-    // Define background color (blue like a pool)
-    vec3 backgroundColor = vec3(0.0, 0.2, 0.6); // Adjust RGB as needed
+    // Define background color (white)
+    // vec3 backgroundColor = vec3(0.0, 0.5, 0.6); // White background
+    vec3 backgroundColor = vec3(1.0); // White background
 
-    // Calculate overall fade factor (average normalizedAge)
-    float fade = 0.0;
-    for (int i = 0; i < MAX_EMITTERS; i++) {
-        if (i >= emitterCount) {
-            break;
-        }
-        float age = emitterAges[i];
-        float normalizedAge = age / emitterLifespan;
-        normalizedAge = clamp(normalizedAge, 0.0, 1.0);
-        fade += normalizedAge;
-    }
-    fade = fade / float(emitterCount > 0 ? emitterCount : 1); // Avoid division by zero
+    // Define wave color (blue)
+    vec3 waveColorDesired = vec3(0.0, 0.5, 0.6); // Blue waves
+    // vec3 waveColorDesired = vec3(1.0); // Blue waves
 
-    // Clamp fade between 0.0 and 1.0
-    fade = clamp(fade, 0.0, 1.0);
-
-    // Blend wave intensity with white based on waveIntensity and fade
-    // This ensures waves appear white and fade smoothly into the blue background
-    vec3 waveColor = mix(backgroundColor, vec3(1.0), waveIntensity * (1.0 - fade));
-
-    // Final color blending with background
-    // Waves are white on the blue background, fading smoothly as emitters age
-    vec3 finalColor = waveColor;
+    // Blend wave color with background based on waveIntensity
+    // This ensures waves appear blue and fade smoothly based on their own intensity
+    vec3 finalColor = mix(backgroundColor, waveColorDesired, waveIntensity);
 
     // Apply final color
     gl_FragColor = vec4(finalColor, 1.0);

@@ -7,13 +7,15 @@ import vertexShader from "./shaders/vertexShader.glsl";
 import "./styles/main.css";
 
 // Define the maximum number of emitters
-const MAX_EMITTERS = 50;
+const MAX_EMITTERS = 6;
 
 // Define the lifespan of each emitter in seconds
-const EMITTER_LIFESPAN = 0.9;
+// const EMITTER_LIFESPAN = 9.0; // Adjusted to 1 second as per your requirement
+const EMITTER_LIFESPAN = 4.8; // Adjusted to 1 second as per your requirement
 
-// Define the delay between emitters in seconds
-const EMITTER_DELAY = 0; // Reduced delay to prevent overloading
+// Define the interval for autonomous emitter spawning in milliseconds
+// const EMITTER_SPAWN_INTERVAL = 4000; // Spawn an emitter every 1 second
+const EMITTER_SPAWN_INTERVAL = 900; // Spawn an emitter every 1 second
 
 // Create the scene
 const scene = new THREE.Scene();
@@ -46,9 +48,11 @@ const material = new THREE.ShaderMaterial({
     resolution: {
       value: new THREE.Vector2(window.innerWidth, window.innerHeight),
     },
-    // Initialize arrays for emitter positions and start times
+    // Initialize arrays for emitter positions, start times, and ages
     emitterPositions: {
-      value: new Array(MAX_EMITTERS).fill(new THREE.Vector2(0, 0)),
+      value: Array(MAX_EMITTERS)
+        .fill(null)
+        .map(() => new THREE.Vector2(0, 0)),
     },
     emitterStartTimes: { value: new Array(MAX_EMITTERS).fill(0.0) },
     emitterAges: { value: new Array(MAX_EMITTERS).fill(0.0) }, // Uniform for emitter ages
@@ -61,75 +65,106 @@ const material = new THREE.ShaderMaterial({
 const mesh = new THREE.Mesh(geometry, material);
 scene.add(mesh);
 
-// Variable to store emitters
+// Interface for Emitter
 interface Emitter {
   position: THREE.Vector2;
   startTime: number;
 }
 
-const emitters: Emitter[] = [];
+// Emitter Pool Class
+class EmitterPool {
+  private pool: Emitter[] = [];
+  private currentIndex: number = 0;
+
+  constructor(private maxEmitters: number) {
+    for (let i = 0; i < maxEmitters; i++) {
+      this.pool.push({
+        position: new THREE.Vector2(0, 0),
+        startTime: -Infinity,
+      });
+    }
+  }
+
+  getNextEmitter(currentTime: number): Emitter {
+    const emitter = this.pool[this.currentIndex];
+    // Reset emitter's start time to current time
+    emitter.startTime = currentTime;
+    // Update currentIndex in a circular manner
+    this.currentIndex = (this.currentIndex + 1) % this.maxEmitters;
+    return emitter;
+  }
+
+  getActiveEmitters(elapsedTime: number): Emitter[] {
+    return this.pool.filter(
+      (emitter) => elapsedTime - emitter.startTime < EMITTER_LIFESPAN
+    );
+  }
+}
+
+// Initialize Emitter Pool
+const emitterPool = new EmitterPool(MAX_EMITTERS);
 
 // Clock to keep track of time
 const clock = new THREE.Clock();
 
-// Variable to track the last emitter addition time
-let lastEmitterTime = -Infinity;
+// Function to update shader uniforms based on active emitters
+function updateShaderEmitters(activeEmitters: Emitter[]) {
+  material.uniforms.emitterCount.value = activeEmitters.length;
 
-// Event listener for mouse movement
-function onMouseMove(event: MouseEvent) {
-  const currentTime = clock.getElapsedTime();
-
-  // Check if enough time has passed since the last emitter
-  if (currentTime - lastEmitterTime < EMITTER_DELAY) {
-    return; // Do not add a new emitter yet
-  }
-
-  // Update the last emitter time
-  lastEmitterTime = currentTime;
-
-  // Convert mouse position to normalized device coordinates (-1 to 1)
-  const x = (event.clientX / window.innerWidth) * 2 - 1;
-  const y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-  // Adjust for aspect ratio
-  const aspect = window.innerWidth / window.innerHeight;
-  const normalizedX = x * aspect;
-  const normalizedY = y;
-
-  // Add a new emitter if under the MAX_EMITTERS limit
-  if (emitters.length < MAX_EMITTERS) {
-    addEmitter(new THREE.Vector2(normalizedX, normalizedY));
-  }
-}
-
-// Function to add a new emitter
-function addEmitter(position: THREE.Vector2) {
-  const currentTime = clock.getElapsedTime();
-  emitters.push({ position, startTime: currentTime });
-  updateShaderEmitters();
-}
-
-// Update shader uniforms with the current emitters
-function updateShaderEmitters() {
-  const positions = material.uniforms.emitterPositions.value;
-  const startTimes = material.uniforms.emitterStartTimes.value;
-
-  emitters.forEach((emitter, index) => {
+  activeEmitters.forEach((emitter, index) => {
     if (index < MAX_EMITTERS) {
-      positions[index] = emitter.position;
-      startTimes[index] = emitter.startTime;
-      // Do NOT reset ages[index] here
+      material.uniforms.emitterPositions.value[index].copy(emitter.position);
+      material.uniforms.emitterStartTimes.value[index] = emitter.startTime;
+      material.uniforms.emitterAges.value[index] =
+        clock.getElapsedTime() - emitter.startTime;
     }
   });
 
-  material.uniforms.emitterCount.value = emitters.length;
+  // Fill the remaining emitters with default values
+  for (let i = activeEmitters.length; i < MAX_EMITTERS; i++) {
+    material.uniforms.emitterPositions.value[i].set(0, 0);
+    material.uniforms.emitterStartTimes.value[i] = 0.0;
+    material.uniforms.emitterAges.value[i] = 0.0;
+  }
+
+  // Notify Three.js that uniforms have been updated
   material.uniforms.emitterPositions.value.needsUpdate = true;
   material.uniforms.emitterStartTimes.value.needsUpdate = true;
-  // No need to update emitterAges here
+  material.uniforms.emitterAges.value.needsUpdate = true;
 }
 
-// Add event listener for mouse movement
-window.addEventListener("mousemove", onMouseMove, false);
+// Function to add a random emitter
+function addRandomEmitter() {
+  const currentTime = clock.getElapsedTime();
+
+  // Get a new emitter slot from the pool
+  const emitter = emitterPool.getNextEmitter(currentTime);
+
+  // Generate random normalized positions (-1 to 1)
+  const randomX = Math.random() * 2 - 1;
+  const randomY = Math.random() * 2 - 1;
+
+  // Adjust aspect ratio
+  const aspect = window.innerWidth / window.innerHeight;
+  const normalizedX = randomX * aspect;
+  const normalizedY = randomY;
+
+  // Set emitter position
+  emitter.position.set(normalizedX, normalizedY);
+
+  // Update shader emitters
+  const activeEmitters = emitterPool.getActiveEmitters(currentTime);
+  updateShaderEmitters(activeEmitters);
+}
+
+// Function to start autonomous emitter generation
+function startAutonomousEmitters() {
+  // Initial emitter
+  addRandomEmitter();
+
+  // Spawn emitters at regular intervals
+  setInterval(addRandomEmitter, EMITTER_SPAWN_INTERVAL);
+}
 
 // Handle window resize
 window.addEventListener("resize", onWindowResize, false);
@@ -164,28 +199,23 @@ function animate() {
   const elapsedTime = clock.getElapsedTime();
   material.uniforms.time.value = elapsedTime;
 
-  // Update emitter ages
-  material.uniforms.emitterAges.value.forEach((age: number, index: number) => {
-    if (index < emitters.length) {
-      material.uniforms.emitterAges.value[index] =
-        elapsedTime - emitters[index].startTime;
+  // Update emitter ages in uniforms
+  for (let i = 0; i < MAX_EMITTERS; i++) {
+    if (material.uniforms.emitterStartTimes.value[i] !== 0.0) {
+      material.uniforms.emitterAges.value[i] =
+        elapsedTime - material.uniforms.emitterStartTimes.value[i];
+    } else {
+      material.uniforms.emitterAges.value[i] = 0.0;
     }
-  });
-  material.uniforms.emitterAges.value.needsUpdate = true;
-
-  // Remove emitters older than EMITTER_LIFESPAN seconds
-  const newEmitters = emitters.filter(
-    (emitter) => elapsedTime - emitter.startTime < EMITTER_LIFESPAN
-  );
-
-  if (newEmitters.length !== emitters.length) {
-    emitters.length = 0; // Clear the array
-    emitters.push(...newEmitters); // Add the remaining emitters
-    updateShaderEmitters(); // Update shader uniforms
   }
+  material.uniforms.emitterAges.value.needsUpdate = true;
 
   // Render the scene
   renderer.render(scene, camera);
 }
 
+// Start autonomous emitter generation
+startAutonomousEmitters();
+
+// Start the animation loop
 animate();
