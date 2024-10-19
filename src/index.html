@@ -5,8 +5,44 @@
     <meta charset="UTF-8" />
     <title>Open API</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Embed Michroma font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Michroma&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      /* Add styles for the overlay text */
+      .overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: black; /* Change color as needed */
+        text-align: center;
+        pointer-events: none; /* Prevent interference with Three.js */
+      }
+      .large-header {
+        font-size: 100px;
+      }
+      .large-text {
+        font-size: 30px;
+        color: gray;
+      }
+      /* Michroma CSS class */
+      .michroma-regular {
+        font-family: "Michroma", sans-serif;
+        font-weight: 400;
+        font-style: normal;
+      }
+    </style>
   </head>
   <body>
     <!-- The canvas element will be appended by Three.js -->
+    <div class="overlay">
+      <h1 class="michroma-regular large-header">OPEN API</h1>
+      <p class="michroma-regular large-text">The future of the economy.</p>
+    </div>
   </body>
 </html>
